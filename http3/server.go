@@ -1,6 +1,7 @@
 package http3
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -24,6 +25,8 @@ var (
 	quicListen     = quic.Listen
 	quicListenAddr = quic.ListenAddr
 )
+
+const nextProtoH3 = "h3-20"
 
 // Server is a HTTP2 server listening for QUIC connections.
 type Server struct {
@@ -88,6 +91,14 @@ func (s *Server) serveImpl(tlsConfig *tls.Config, conn net.PacketConn) error {
 		return errors.New("ListenAndServe may only be called once")
 	}
 
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{}
+	}
+
+	if !strSliceContains(tlsConfig.NextProtos, nextProtoH3) {
+		tlsConfig.NextProtos = append(tlsConfig.NextProtos, nextProtoH3)
+	}
+
 	var ln quic.Listener
 	var err error
 	if conn == nil {
@@ -114,6 +125,16 @@ func (s *Server) serveImpl(tlsConfig *tls.Config, conn net.PacketConn) error {
 func (s *Server) handleConn(sess quic.Session) {
 	// TODO: accept control streams
 	decoder := qpack.NewDecoder(nil)
+
+	// send a SETTINGS frame
+	str, err := sess.OpenUniStreamSync()
+	if err != nil {
+		s.logger.Debugf("Opening the control stream failed.")
+		return
+	}
+	buf := bytes.NewBuffer([]byte{0})
+	(&settingsFrame{}).Write(buf)
+	str.Write(buf.Bytes())
 
 	for {
 		str, err := sess.AcceptStream()
@@ -352,4 +373,13 @@ func ListenAndServe(addr, certFile, keyFile string, handler http.Handler) error 
 		// Cannot close the HTTP server or wait for requests to complete properly :/
 		return err
 	}
+}
+
+func strSliceContains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
