@@ -84,12 +84,12 @@ type server struct {
 	// If it is started with Listen, we take a packet conn as a parameter.
 	createdPacketConn bool
 
-	cookieGenerator *handshake.CookieGenerator
+	tokenGenerator *handshake.TokenGenerator
 
 	sessionHandler packetHandlerManager
 
 	// set as a member, so they can be set in the tests
-	newSession func(connection, sessionRunner, protocol.ConnectionID /* original connection ID */, protocol.ConnectionID /* destination connection ID */, protocol.ConnectionID /* source connection ID */, *Config, *tls.Config, *handshake.TransportParameters, utils.Logger, protocol.VersionNumber) (quicSession, error)
+	newSession func(connection, sessionRunner, protocol.ConnectionID /* original connection ID */, protocol.ConnectionID /* destination connection ID */, protocol.ConnectionID /* source connection ID */, *Config, *tls.Config, *handshake.TransportParameters, *handshake.TokenGenerator, utils.Logger, protocol.VersionNumber) (quicSession, error)
 
 	serverError error
 	errorChan   chan struct{}
@@ -141,6 +141,9 @@ func listen(conn net.PacketConn, tlsConf *tls.Config, config *Config) (*server, 
 	if tlsConf == nil || len(tlsConf.Certificates) == 0 {
 		return nil, errors.New("quic: Certificates not set in tls.Config")
 	}
+	if len(tlsConf.NextProtos) == 0 {
+		return nil, errors.New("quic: NextProtos not set in tls.Config")
+	}
 	config = populateServerConfig(config)
 	for _, v := range config.Versions {
 		if !protocol.IsValidVersion(v) {
@@ -186,19 +189,23 @@ func (s *server) setup() error {
 			}()
 		},
 	}
-	cookieGenerator, err := handshake.NewCookieGenerator()
+	tokenGenerator, err := handshake.NewTokenGenerator()
 	if err != nil {
 		return err
 	}
-	s.cookieGenerator = cookieGenerator
+	s.tokenGenerator = tokenGenerator
 	return nil
 }
 
-var defaultAcceptCookie = func(clientAddr net.Addr, cookie *Cookie) bool {
-	if cookie == nil {
+var defaultAcceptToken = func(clientAddr net.Addr, token *Token) bool {
+	if token == nil {
 		return false
 	}
-	if time.Now().After(cookie.SentTime.Add(protocol.CookieExpiryTime)) {
+	validity := protocol.TokenValidity
+	if token.IsRetryToken {
+		validity = protocol.RetryTokenValidity
+	}
+	if time.Now().After(token.SentTime.Add(validity)) {
 		return false
 	}
 	var sourceAddr string
@@ -207,7 +214,7 @@ var defaultAcceptCookie = func(clientAddr net.Addr, cookie *Cookie) bool {
 	} else {
 		sourceAddr = clientAddr.String()
 	}
-	return sourceAddr == cookie.RemoteAddr
+	return sourceAddr == token.RemoteAddr
 }
 
 // populateServerConfig populates fields in the quic.Config with their default values, if none are set
@@ -221,9 +228,9 @@ func populateServerConfig(config *Config) *Config {
 		versions = protocol.SupportedVersions
 	}
 
-	vsa := defaultAcceptCookie
-	if config.AcceptCookie != nil {
-		vsa = config.AcceptCookie
+	verifyToken := defaultAcceptToken
+	if config.AcceptToken != nil {
+		verifyToken = config.AcceptToken
 	}
 
 	handshakeTimeout := protocol.DefaultHandshakeTimeout
@@ -264,7 +271,7 @@ func populateServerConfig(config *Config) *Config {
 		Versions:                              versions,
 		HandshakeTimeout:                      handshakeTimeout,
 		IdleTimeout:                           idleTimeout,
-		AcceptCookie:                          vsa,
+		AcceptToken:                           verifyToken,
 		KeepAlive:                             config.KeepAlive,
 		MaxReceiveStreamFlowControlWindow:     maxReceiveStreamFlowControlWindow,
 		MaxReceiveConnectionFlowControlWindow: maxReceiveConnectionFlowControlWindow,
@@ -381,19 +388,20 @@ func (s *server) handleInitialImpl(p *receivedPacket, hdr *wire.Header) (quicSes
 		return nil, nil, errors.New("too short connection ID")
 	}
 
-	var cookie *Cookie
+	var token *Token
 	var origDestConnectionID protocol.ConnectionID
 	if len(hdr.Token) > 0 {
-		c, err := s.cookieGenerator.DecodeToken(hdr.Token)
+		c, err := s.tokenGenerator.DecodeToken(hdr.Token)
 		if err == nil {
-			cookie = &Cookie{
-				RemoteAddr: c.RemoteAddr,
-				SentTime:   c.SentTime,
+			token = &Token{
+				IsRetryToken: c.IsRetryToken,
+				RemoteAddr:   c.RemoteAddr,
+				SentTime:     c.SentTime,
 			}
 			origDestConnectionID = c.OriginalDestConnectionID
 		}
 	}
-	if !s.config.AcceptCookie(p.remoteAddr, cookie) {
+	if !s.config.AcceptToken(p.remoteAddr, token) {
 		// Log the Initial packet now.
 		// If no Retry is sent, the packet will be logged by the session.
 		(&wire.ExtendedHeader{Header: *hdr}).Log(s.logger)
@@ -440,8 +448,8 @@ func (s *server) createNewSession(
 		InitialMaxStreamDataUni:        protocol.InitialMaxStreamData,
 		InitialMaxData:                 protocol.InitialMaxData,
 		IdleTimeout:                    s.config.IdleTimeout,
-		MaxBidiStreams:                 uint64(s.config.MaxIncomingStreams),
-		MaxUniStreams:                  uint64(s.config.MaxIncomingUniStreams),
+		MaxBidiStreamNum:               protocol.StreamNum(s.config.MaxIncomingStreams),
+		MaxUniStreamNum:                protocol.StreamNum(s.config.MaxIncomingUniStreams),
 		MaxAckDelay:                    protocol.MaxAckDelayInclGranularity,
 		AckDelayExponent:               protocol.AckDelayExponent,
 		DisableMigration:               true,
@@ -457,6 +465,7 @@ func (s *server) createNewSession(
 		s.config,
 		s.tlsConf,
 		params,
+		s.tokenGenerator,
 		s.logger,
 		version,
 	)
@@ -468,7 +477,7 @@ func (s *server) createNewSession(
 }
 
 func (s *server) sendRetry(remoteAddr net.Addr, hdr *wire.Header) error {
-	token, err := s.cookieGenerator.NewToken(remoteAddr, hdr.DestConnectionID)
+	token, err := s.tokenGenerator.NewRetryToken(remoteAddr, hdr.DestConnectionID)
 	if err != nil {
 		return err
 	}

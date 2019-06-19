@@ -2,7 +2,6 @@ package handshake
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"io"
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
@@ -29,24 +28,24 @@ type tlsExtensionHandler interface {
 	TransportParameters() <-chan []byte
 }
 
+type handshakeRunner interface {
+	OnReceivedParams([]byte)
+	OnHandshakeComplete()
+	OnError(error)
+	DropKeys(protocol.EncryptionLevel)
+}
+
 // CryptoSetup handles the handshake and protecting / unprotecting packets
 type CryptoSetup interface {
-	RunHandshake() error
+	RunHandshake()
 	io.Closer
 	ChangeConnectionID(protocol.ConnectionID) error
 
 	HandleMessage([]byte, protocol.EncryptionLevel) bool
+	Received1RTTAck()
 	ConnectionState() tls.ConnectionState
 
 	GetSealer() (protocol.EncryptionLevel, Sealer)
 	GetSealerWithEncryptionLevel(protocol.EncryptionLevel) (Sealer, error)
 	GetOpener(protocol.EncryptionLevel) (Opener, error)
-}
-
-// ConnectionState records basic details about the QUIC connection.
-// Warning: This API should not be considered stable and might change soon.
-type ConnectionState struct {
-	HandshakeComplete bool                // handshake is complete
-	ServerName        string              // server name requested by client, if any (server side only)
-	PeerCertificates  []*x509.Certificate // certificate chain presented by remote peer
 }

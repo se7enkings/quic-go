@@ -16,10 +16,14 @@ type StreamID = protocol.StreamID
 // A VersionNumber is a QUIC version number.
 type VersionNumber = protocol.VersionNumber
 
-// A Cookie can be used to verify the ownership of the client address.
-type Cookie struct {
-	RemoteAddr string
-	SentTime   time.Time
+// A Token can be used to verify the ownership of the client address.
+type Token struct {
+	// IsRetryToken encodes how the client received the token. There are two ways:
+	// * In a Retry packet sent when trying to establish a new connection.
+	// * In a NEW_TOKEN frame on a previous connection.
+	IsRetryToken bool
+	RemoteAddr   string
+	SentTime     time.Time
 }
 
 // An ErrorCode is an application-defined error code.
@@ -187,11 +191,14 @@ type Config struct {
 	// If the timeout is exceeded, the connection is closed.
 	// If this value is zero, the timeout is set to 30 seconds.
 	IdleTimeout time.Duration
-	// AcceptCookie determines if a Cookie is accepted.
-	// It is called with cookie = nil if the client didn't send an Cookie.
-	// If not set, it verifies that the address matches, and that the Cookie was issued within the last 24 hours.
+	// AcceptToken determines if a Token is accepted.
+	// It is called with token = nil if the client didn't send a token.
+	// If not set, a default verification function is used:
+	// * it verifies that the address matches, and
+	//   * if the token is a retry token, that it was issued within the last 5 seconds
+	//   * else, that it was issued within the last 24 hours.
 	// This option is only valid for the server.
-	AcceptCookie func(clientAddr net.Addr, cookie *Cookie) bool
+	AcceptToken func(clientAddr net.Addr, token *Token) bool
 	// MaxReceiveStreamFlowControlWindow is the maximum stream-level flow control window for receiving data.
 	// If this value is zero, it will default to 1 MB for the server and 6 MB for the client.
 	MaxReceiveStreamFlowControlWindow uint64

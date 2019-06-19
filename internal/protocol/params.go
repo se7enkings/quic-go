@@ -60,8 +60,11 @@ const MaxTrackedSkippedPackets = 10
 // If the queue is full, new connection attempts will be rejected.
 const MaxAcceptQueueSize = 32
 
-// CookieExpiryTime is the valid time of a cookie
-const CookieExpiryTime = 24 * time.Hour
+// TokenValidity is the duration that a (non-retry) token is considered valid
+const TokenValidity = 24 * time.Hour
+
+// RetryTokenValidity is the duration that a retry token is considered valid
+const RetryTokenValidity = 10 * time.Second
 
 // MaxOutstandingSentPackets is maximum number of packets saved for retransmission.
 // When reached, it imposes a soft limit on sending new packets:

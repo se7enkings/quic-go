@@ -47,8 +47,9 @@ type streamManager interface {
 }
 
 type cryptoStreamHandler interface {
-	RunHandshake() error
+	RunHandshake()
 	ChangeConnectionID(protocol.ConnectionID) error
+	Received1RTTAck()
 	io.Closer
 	ConnectionState() tls.ConnectionState
 }
@@ -69,6 +70,18 @@ func (p *receivedPacket) Clone() *receivedPacket {
 		buffer:     p.buffer,
 	}
 }
+
+type handshakeRunner struct {
+	onReceivedParams    func([]byte)
+	onError             func(error)
+	dropKeys            func(protocol.EncryptionLevel)
+	onHandshakeComplete func()
+}
+
+func (r *handshakeRunner) OnReceivedParams(b []byte)            { r.onReceivedParams(b) }
+func (r *handshakeRunner) OnError(e error)                      { r.onError(e) }
+func (r *handshakeRunner) DropKeys(el protocol.EncryptionLevel) { r.dropKeys(el) }
+func (r *handshakeRunner) OnHandshakeComplete()                 { r.onHandshakeComplete() }
 
 type closeError struct {
 	err       error
@@ -103,6 +116,7 @@ type session struct {
 	framer                framer
 	windowUpdateQueue     *windowUpdateQueue
 	connFlowController    flowcontrol.ConnectionFlowController
+	tokenGenerator        *handshake.TokenGenerator // only set for the server
 
 	unpacker    unpacker
 	frameParser wire.FrameParser
@@ -129,9 +143,8 @@ type session struct {
 	handshakeCompleteChan chan struct{} // is closed when the handshake completes
 	handshakeComplete     bool
 
-	receivedRetry                    bool
-	receivedFirstPacket              bool
-	receivedFirstForwardSecurePacket bool
+	receivedRetry       bool
+	receivedFirstPacket bool
 
 	sessionCreationTime time.Time
 	// The idle timeout is set based on the max of the time we received the last packet...
@@ -163,6 +176,7 @@ var newSession = func(
 	conf *Config,
 	tlsConf *tls.Config,
 	params *handshake.TransportParameters,
+	tokenGenerator *handshake.TokenGenerator,
 	logger utils.Logger,
 	v protocol.VersionNumber,
 ) (quicSession, error) {
@@ -172,6 +186,7 @@ var newSession = func(
 		config:                conf,
 		srcConnID:             srcConnID,
 		destConnID:            destConnID,
+		tokenGenerator:        tokenGenerator,
 		perspective:           protocol.PerspectiveServer,
 		handshakeCompleteChan: make(chan struct{}),
 		logger:                logger,
@@ -198,7 +213,12 @@ var newSession = func(
 		clientDestConnID,
 		conn.RemoteAddr(),
 		params,
-		s.processTransportParameters,
+		&handshakeRunner{
+			onReceivedParams:    s.processTransportParameters,
+			onError:             s.closeLocal,
+			dropKeys:            s.dropEncryptionLevel,
+			onHandshakeComplete: func() { close(s.handshakeCompleteChan) },
+		},
 		tlsConf,
 		logger,
 	)
@@ -266,7 +286,12 @@ var newClientSession = func(
 		s.destConnID,
 		conn.RemoteAddr(),
 		params,
-		s.processTransportParameters,
+		&handshakeRunner{
+			onReceivedParams:    s.processTransportParameters,
+			onError:             s.closeLocal,
+			dropKeys:            s.dropEncryptionLevel,
+			onHandshakeComplete: func() { close(s.handshakeCompleteChan) },
+		},
 		tlsConf,
 		logger,
 	)
@@ -335,13 +360,8 @@ func (s *session) postSetup() error {
 func (s *session) run() error {
 	defer s.ctxCancel()
 
-	go func() {
-		if err := s.cryptoStreamHandler.RunHandshake(); err != nil {
-			s.closeLocal(err)
-			return
-		}
-		close(s.handshakeCompleteChan)
-	}()
+	go s.cryptoStreamHandler.RunHandshake()
+
 	if s.perspective == protocol.PerspectiveClient {
 		select {
 		case <-s.clientHelloWritten:
@@ -478,14 +498,15 @@ func (s *session) handleHandshakeComplete() {
 	s.sessionRunner.OnHandshakeComplete(s)
 
 	// The client completes the handshake first (after sending the CFIN).
-	// We need to make sure they learn about the peer completing the handshake,
+	// We need to make sure it learns about the server completing the handshake,
 	// in order to stop retransmitting handshake packets.
-	// They will stop retransmitting handshake packets when receiving the first forward-secure packet.
-	// We need to make sure that an ack-eliciting 1-RTT packet is sent,
-	// independent from the application protocol.
+	// They will stop retransmitting handshake packets when receiving the first 1-RTT packet.
 	if s.perspective == protocol.PerspectiveServer {
-		s.queueControlFrame(&wire.PingFrame{})
-		s.sentPacketHandler.SetHandshakeComplete()
+		token, err := s.tokenGenerator.NewToken(s.conn.RemoteAddr())
+		if err != nil {
+			s.closeLocal(err)
+		}
+		s.queueControlFrame(&wire.NewTokenFrame{Token: token})
 	}
 }
 
@@ -559,16 +580,19 @@ func (s *session) handleSinglePacket(p *receivedPacket, hdr *wire.Header) bool /
 
 	packet, err := s.unpacker.Unpack(hdr, p.data)
 	if err != nil {
-		if err == handshake.ErrOpenerNotYetAvailable {
+		switch err {
+		case handshake.ErrKeysDropped:
+			s.logger.Debugf("Dropping packet because we already dropped the keys.")
+		case handshake.ErrOpenerNotYetAvailable:
 			// Sealer for this encryption level not yet available.
 			// Try again later.
 			wasQueued = true
 			s.tryQueueingUndecryptablePacket(p)
-			return false
+		default:
+			// This might be a packet injected by an attacker.
+			// Drop it.
+			s.logger.Debugf("Dropping packet that could not be unpacked. Unpack error: %s", err)
 		}
-		// This might be a packet injected by an attacker.
-		// Drop it.
-		s.logger.Debugf("Dropping packet that could not be unpacked. Unpack error: %s", err)
 		return false
 	}
 
@@ -641,15 +665,6 @@ func (s *session) handleUnpackedPacket(packet *unpackedPacket, rcvTime time.Time
 	s.firstAckElicitingPacketAfterIdleSentTime = time.Time{}
 	s.keepAlivePingSent = false
 
-	// The client completes the handshake first (after sending the CFIN).
-	// We know that the server completed the handshake as soon as we receive a forward-secure packet.
-	if s.perspective == protocol.PerspectiveClient {
-		if !s.receivedFirstForwardSecurePacket && packet.encryptionLevel == protocol.Encryption1RTT {
-			s.receivedFirstForwardSecurePacket = true
-			s.sentPacketHandler.SetHandshakeComplete()
-		}
-	}
-
 	r := bytes.NewReader(packet.data)
 	var isAckEliciting bool
 	for {
@@ -685,7 +700,7 @@ func (s *session) handleFrame(f wire.Frame, pn protocol.PacketNumber, encLevel p
 	case *wire.AckFrame:
 		err = s.handleAckFrame(frame, pn, encLevel)
 	case *wire.ConnectionCloseFrame:
-		s.closeRemote(qerr.Error(frame.ErrorCode, frame.ReasonPhrase))
+		s.handleConnectionCloseFrame(frame)
 	case *wire.ResetStreamFrame:
 		err = s.handleResetStreamFrame(frame)
 	case *wire.MaxDataFrame:
@@ -745,6 +760,16 @@ func (s *session) handlePacketAfterClosed(p *receivedPacket) {
 	if err := s.conn.Write(s.connectionClosePacket.raw); err != nil {
 		s.logger.Debugf("Error retransmitting CONNECTION_CLOSE: %s", err)
 	}
+}
+
+func (s *session) handleConnectionCloseFrame(frame *wire.ConnectionCloseFrame) {
+	var e error
+	if frame.IsApplicationError {
+		e = qerr.ApplicationError(frame.ErrorCode, frame.ReasonPhrase)
+	} else {
+		e = qerr.Error(frame.ErrorCode, frame.ReasonPhrase)
+	}
+	s.closeRemote(e)
 }
 
 func (s *session) handleCryptoFrame(frame *wire.CryptoFrame, encLevel protocol.EncryptionLevel) error {
@@ -832,6 +857,7 @@ func (s *session) handleAckFrame(frame *wire.AckFrame, pn protocol.PacketNumber,
 	}
 	if encLevel == protocol.Encryption1RTT {
 		s.receivedPacketHandler.IgnoreBelow(s.sentPacketHandler.GetLowestPacketNotConfirmedAcked())
+		s.cryptoStreamHandler.Received1RTTAck()
 	}
 	return nil
 }
@@ -920,6 +946,11 @@ func (s *session) handleCloseError(closeErr closeError) {
 	if err := s.sendConnectionClose(quicErr); err != nil {
 		s.logger.Debugf("Error sending CONNECTION_CLOSE: %s", err)
 	}
+}
+
+func (s *session) dropEncryptionLevel(encLevel protocol.EncryptionLevel) {
+	s.sentPacketHandler.DropPackets(encLevel)
+	s.receivedPacketHandler.DropPackets(encLevel)
 }
 
 func (s *session) processTransportParameters(data []byte) {
@@ -1157,21 +1188,6 @@ func (s *session) logPacket(packet *packedPacket) {
 	for _, frame := range packet.frames {
 		wire.LogFrame(s.logger, frame, true)
 	}
-}
-
-// GetOrOpenStream either returns an existing stream, a newly opened stream, or nil if a stream with the provided ID is already closed.
-// It is *only* needed for gQUIC's H2.
-// It will be removed as soon as gQUIC moves towards the IETF H2/QUIC stream mapping.
-func (s *session) GetOrOpenStream(id protocol.StreamID) (Stream, error) {
-	str, err := s.streamsMap.GetOrOpenSendStream(id)
-	if str != nil {
-		if bstr, ok := str.(Stream); ok {
-			return bstr, err
-		}
-		return nil, fmt.Errorf("Stream %d is not a bidirectional stream", id)
-	}
-	// make sure to return an actual nil value here, not an Stream with value nil
-	return nil, err
 }
 
 // AcceptStream returns the next stream openend by the peer

@@ -137,12 +137,22 @@ func (mr *MockCryptoSetupMockRecorder) HandleMessage(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockCryptoSetup)(nil).HandleMessage), arg0, arg1)
 }
 
-// RunHandshake mocks base method
-func (m *MockCryptoSetup) RunHandshake() error {
+// Received1RTTAck mocks base method
+func (m *MockCryptoSetup) Received1RTTAck() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunHandshake")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Received1RTTAck")
+}
+
+// Received1RTTAck indicates an expected call of Received1RTTAck
+func (mr *MockCryptoSetupMockRecorder) Received1RTTAck() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Received1RTTAck", reflect.TypeOf((*MockCryptoSetup)(nil).Received1RTTAck))
+}
+
+// RunHandshake mocks base method
+func (m *MockCryptoSetup) RunHandshake() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RunHandshake")
 }
 
 // RunHandshake indicates an expected call of RunHandshake

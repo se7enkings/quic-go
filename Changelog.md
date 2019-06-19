@@ -3,6 +3,9 @@
 ## v0.12.0 (unreleased)
 
 - Implement HTTP/3.
+- Rename `quic.Cookie` to `quic.Token` and `quic.Config.AcceptCookie` to `quic.Config.AcceptToken`.
+- Distinguish between Retry tokens and tokens sent in NEW_TOKEN frames.
+- Enforce application protocol negotiation (via `tls.Config.NextProtos`).
 
 ## v0.11.0 (2019-04-05)
 

@@ -3,6 +3,7 @@ package quic
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -119,6 +120,9 @@ func dialContext(
 	config *Config,
 	createdPacketConn bool,
 ) (Session, error) {
+	if tlsConf == nil || len(tlsConf.NextProtos) == 0 {
+		return nil, errors.New("quic: NextProtos not set in tls.Config")
+	}
 	config = populateClientConfig(config, createdPacketConn)
 	packetHandlers, err := getMultiplexer().AddConn(pconn, config.ConnectionIDLength, config.StatelessResetKey)
 	if err != nil {
@@ -350,8 +354,8 @@ func (c *client) createNewTLSSession(version protocol.VersionNumber) error {
 		InitialMaxStreamDataUni:        protocol.InitialMaxStreamData,
 		InitialMaxData:                 protocol.InitialMaxData,
 		IdleTimeout:                    c.config.IdleTimeout,
-		MaxBidiStreams:                 uint64(c.config.MaxIncomingStreams),
-		MaxUniStreams:                  uint64(c.config.MaxIncomingUniStreams),
+		MaxBidiStreamNum:               protocol.StreamNum(c.config.MaxIncomingStreams),
+		MaxUniStreamNum:                protocol.StreamNum(c.config.MaxIncomingUniStreams),
 		MaxAckDelay:                    protocol.MaxAckDelayInclGranularity,
 		AckDelayExponent:               protocol.AckDelayExponent,
 		DisableMigration:               true,
