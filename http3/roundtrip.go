@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	quic "github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/internal/qerr"
 
 	"golang.org/x/net/http/httpguts"
 )
@@ -109,7 +110,18 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 
 // RoundTrip does a round trip.
 func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return r.RoundTripOpt(req, RoundTripOpt{})
+	res, err := r.RoundTripOpt(req, RoundTripOpt{})
+	if qErr, ok := err.(*qerr.QuicError); ok &&
+		(qErr.ErrorCode == qerr.NoError ||
+			qErr.ErrorCode == qerr.InternalError) {
+
+		hostname := authorityAddr("https", hostnameFromRequest(req))
+		r.delClient(hostname)
+
+		// try again.
+		res, err = r.RoundTripOpt(req, RoundTripOpt{})
+	}
+	return res, err
 }
 
 func (r *RoundTripper) getClient(hostname string, onlyCached bool) (http.RoundTripper, error) {
@@ -135,6 +147,21 @@ func (r *RoundTripper) getClient(hostname string, onlyCached bool) (http.RoundTr
 		r.clients[hostname] = client
 	}
 	return client, nil
+}
+
+func (r *RoundTripper) delClient(hostname string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.clients == nil {
+		return
+	}
+
+	client, ok := r.clients[hostname]
+	if ok {
+		client.Close()
+		delete(r.clients, hostname)
+	}
 }
 
 // Close closes the QUIC connections that this RoundTripper has used
