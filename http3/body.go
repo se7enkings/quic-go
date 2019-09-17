@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	"sync"
+
 	"github.com/lucas-clemente/quic-go"
 )
 
@@ -17,7 +19,7 @@ type body struct {
 	// The channel is closed when the user is done with this response:
 	// either when Read() errors, or when Close() is called.
 	reqDone       chan<- struct{}
-	reqDoneClosed bool
+	reqDoneClosed sync.Once
 
 	onFrameError func()
 
@@ -86,11 +88,9 @@ func (r *body) readImpl(b []byte) (int, error) {
 }
 
 func (r *body) requestDone() {
-	if r.reqDoneClosed {
-		return
-	}
-	close(r.reqDone)
-	r.reqDoneClosed = true
+	r.reqDoneClosed.Do(func() {
+		close(r.reqDone)
+	})
 }
 
 func (r *body) Close() error {
