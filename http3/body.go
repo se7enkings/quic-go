@@ -94,11 +94,13 @@ func (r *body) requestDone() {
 }
 
 func (r *body) Close() error {
+	// cancel Read to make sure server.go@268 will return io.EOF.
+	r.str.CancelRead(quic.ErrorCode(errorRequestCanceled))
+
 	// quic.Stream.Close() closes the write side, not the read side
 	if r.isRequest {
 		return r.str.Close()
 	}
 	r.requestDone()
-	r.str.CancelRead(quic.ErrorCode(errorRequestCanceled))
 	return nil
 }
