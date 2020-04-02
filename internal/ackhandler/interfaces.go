@@ -24,9 +24,10 @@ type Packet struct {
 type SentPacketHandler interface {
 	// SentPacket may modify the packet
 	SentPacket(packet *Packet)
-	ReceivedAck(ackFrame *wire.AckFrame, withPacketNumber protocol.PacketNumber, encLevel protocol.EncryptionLevel, recvTime time.Time) error
+	ReceivedAck(ackFrame *wire.AckFrame, encLevel protocol.EncryptionLevel, recvTime time.Time) error
 	DropPackets(protocol.EncryptionLevel)
 	ResetForRetry() error
+	SetHandshakeComplete()
 
 	// The SendMode determines if and what kind of packets can be sent.
 	SendMode() SendMode
@@ -41,8 +42,7 @@ type SentPacketHandler interface {
 	ShouldSendNumPackets() int
 
 	// only to be called once the handshake is complete
-	GetLowestPacketNotConfirmedAcked() protocol.PacketNumber
-	QueueProbePacket() bool /* was a packet queued */
+	QueueProbePacket(protocol.EncryptionLevel) bool /* was a packet queued */
 
 	PeekPacketNumber(protocol.EncryptionLevel) (protocol.PacketNumber, protocol.PacketNumberLen)
 	PopPacketNumber(protocol.EncryptionLevel) protocol.PacketNumber
@@ -54,10 +54,13 @@ type SentPacketHandler interface {
 	GetStats() *quictrace.TransportState
 }
 
+type sentPacketTracker interface {
+	GetLowestPacketNotConfirmedAcked() protocol.PacketNumber
+}
+
 // ReceivedPacketHandler handles ACKs needed to send for incoming packets
 type ReceivedPacketHandler interface {
-	ReceivedPacket(pn protocol.PacketNumber, encLevel protocol.EncryptionLevel, rcvTime time.Time, shouldInstigateAck bool)
-	IgnoreBelow(protocol.PacketNumber)
+	ReceivedPacket(pn protocol.PacketNumber, encLevel protocol.EncryptionLevel, rcvTime time.Time, shouldInstigateAck bool) error
 	DropPackets(protocol.EncryptionLevel)
 
 	GetAlarmTimeout() time.Time

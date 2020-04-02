@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 
 	. "github.com/onsi/ginkgo"
@@ -34,7 +33,7 @@ var _ = Describe("Bidirectional streams", func() {
 					Versions:           []protocol.VersionNumber{version},
 					MaxIncomingStreams: 0,
 				}
-				server, err = quic.ListenAddr("localhost:0", getTLSConfig(), qconf)
+				server, err = quic.ListenAddr("localhost:0", getTLSConfig(), getQuicConfigForServer(qconf))
 				Expect(err).ToNot(HaveOccurred())
 				serverAddr = fmt.Sprintf("localhost:%d", server.Addr().(*net.UDPAddr).Port)
 			})
@@ -49,7 +48,7 @@ var _ = Describe("Bidirectional streams", func() {
 				for i := 0; i < numStreams; i++ {
 					str, err := sess.OpenStreamSync(context.Background())
 					Expect(err).ToNot(HaveOccurred())
-					data := testserver.GeneratePRData(25 * i)
+					data := GeneratePRData(25 * i)
 					go func() {
 						defer GinkgoRecover()
 						_, err := str.Write(data)
@@ -101,7 +100,7 @@ var _ = Describe("Bidirectional streams", func() {
 				client, err := quic.DialAddr(
 					serverAddr,
 					getTLSClientConfig(),
-					qconf,
+					getQuicConfigForClient(qconf),
 				)
 				Expect(err).ToNot(HaveOccurred())
 				runSendingPeer(client)
@@ -113,13 +112,13 @@ var _ = Describe("Bidirectional streams", func() {
 					sess, err := server.Accept(context.Background())
 					Expect(err).ToNot(HaveOccurred())
 					runSendingPeer(sess)
-					sess.Close()
+					sess.CloseWithError(0, "")
 				}()
 
 				client, err := quic.DialAddr(
 					serverAddr,
 					getTLSClientConfig(),
-					qconf,
+					getQuicConfigForClient(qconf),
 				)
 				Expect(err).ToNot(HaveOccurred())
 				runReceivingPeer(client)
@@ -146,7 +145,7 @@ var _ = Describe("Bidirectional streams", func() {
 				client, err := quic.DialAddr(
 					serverAddr,
 					getTLSClientConfig(),
-					qconf,
+					getQuicConfigForClient(qconf),
 				)
 				Expect(err).ToNot(HaveOccurred())
 				done2 := make(chan struct{})

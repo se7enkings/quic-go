@@ -10,7 +10,6 @@ import (
 	"net"
 
 	quic "github.com/lucas-clemente/quic-go"
-	_ "github.com/lucas-clemente/quic-go/integrationtests/tools/testlog"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/testdata"
 
@@ -86,7 +85,7 @@ var _ = Describe("Benchmarks", func() {
 				b.RecordValue("transfer rate [MB/s]", float64(dataLen)/1e6/runtime.Seconds())
 
 				ln.Close()
-				sess.Close()
+				sess.CloseWithError(0, "")
 			}, 3)
 		})
 	}

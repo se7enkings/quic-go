@@ -9,8 +9,6 @@ import (
 	"time"
 
 	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testlog"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 
 	. "github.com/onsi/ginkgo"
@@ -35,7 +33,7 @@ var _ = Describe("Multiplexing", func() {
 							str, err := sess.OpenStream()
 							Expect(err).ToNot(HaveOccurred())
 							defer str.Close()
-							_, err = str.Write(testserver.PRData)
+							_, err = str.Write(PRData)
 							Expect(err).ToNot(HaveOccurred())
 						}()
 					}
@@ -48,15 +46,15 @@ var _ = Describe("Multiplexing", func() {
 					addr,
 					fmt.Sprintf("localhost:%d", addr.(*net.UDPAddr).Port),
 					getTLSClientConfig(),
-					&quic.Config{Versions: []protocol.VersionNumber{version}},
+					getQuicConfigForClient(&quic.Config{Versions: []protocol.VersionNumber{version}}),
 				)
 				Expect(err).ToNot(HaveOccurred())
-				defer sess.Close()
+				defer sess.CloseWithError(0, "")
 				str, err := sess.AcceptStream(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				data, err := ioutil.ReadAll(str)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(data).To(Equal(testserver.PRData))
+				Expect(data).To(Equal(PRData))
 			}
 
 			Context("multiplexing clients on the same conn", func() {
@@ -64,7 +62,7 @@ var _ = Describe("Multiplexing", func() {
 					ln, err := quic.ListenAddr(
 						"localhost:0",
 						getTLSConfig(),
-						&quic.Config{Versions: []protocol.VersionNumber{version}},
+						getQuicConfigForServer(&quic.Config{Versions: []protocol.VersionNumber{version}}),
 					)
 					Expect(err).ToNot(HaveOccurred())
 					return ln
@@ -94,7 +92,7 @@ var _ = Describe("Multiplexing", func() {
 						close(done2)
 					}()
 					timeout := 30 * time.Second
-					if testlog.Debug() {
+					if debugLog() {
 						timeout = time.Minute
 					}
 					Eventually(done1, timeout).Should(BeClosed())
@@ -128,7 +126,7 @@ var _ = Describe("Multiplexing", func() {
 						close(done2)
 					}()
 					timeout := 30 * time.Second
-					if testlog.Debug() {
+					if debugLog() {
 						timeout = time.Minute
 					}
 					Eventually(done1, timeout).Should(BeClosed())
@@ -147,7 +145,7 @@ var _ = Describe("Multiplexing", func() {
 					server, err := quic.Listen(
 						conn,
 						getTLSConfig(),
-						&quic.Config{Versions: []protocol.VersionNumber{version}},
+						getQuicConfigForServer(&quic.Config{Versions: []protocol.VersionNumber{version}}),
 					)
 					Expect(err).ToNot(HaveOccurred())
 					runServer(server)
@@ -158,7 +156,7 @@ var _ = Describe("Multiplexing", func() {
 						close(done)
 					}()
 					timeout := 30 * time.Second
-					if testlog.Debug() {
+					if debugLog() {
 						timeout = time.Minute
 					}
 					Eventually(done, timeout).Should(BeClosed())
@@ -183,7 +181,7 @@ var _ = Describe("Multiplexing", func() {
 					server1, err := quic.Listen(
 						conn1,
 						getTLSConfig(),
-						&quic.Config{Versions: []protocol.VersionNumber{version}},
+						getQuicConfigForServer(&quic.Config{Versions: []protocol.VersionNumber{version}}),
 					)
 					Expect(err).ToNot(HaveOccurred())
 					runServer(server1)
@@ -192,7 +190,7 @@ var _ = Describe("Multiplexing", func() {
 					server2, err := quic.Listen(
 						conn2,
 						getTLSConfig(),
-						&quic.Config{Versions: []protocol.VersionNumber{version}},
+						getQuicConfigForServer(&quic.Config{Versions: []protocol.VersionNumber{version}}),
 					)
 					Expect(err).ToNot(HaveOccurred())
 					runServer(server2)
@@ -211,7 +209,7 @@ var _ = Describe("Multiplexing", func() {
 						close(done2)
 					}()
 					timeout := 30 * time.Second
-					if testlog.Debug() {
+					if debugLog() {
 						timeout = time.Minute
 					}
 					Eventually(done1, timeout).Should(BeClosed())

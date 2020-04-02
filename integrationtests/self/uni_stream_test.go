@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +26,7 @@ var _ = Describe("Unidirectional Streams", func() {
 	BeforeEach(func() {
 		var err error
 		qconf = &quic.Config{Versions: []protocol.VersionNumber{protocol.VersionTLS}}
-		server, err = quic.ListenAddr("localhost:0", getTLSConfig(), qconf)
+		server, err = quic.ListenAddr("localhost:0", getTLSConfig(), getQuicConfigForServer(qconf))
 		Expect(err).ToNot(HaveOccurred())
 		serverAddr = fmt.Sprintf("localhost:%d", server.Addr().(*net.UDPAddr).Port)
 	})
@@ -37,7 +36,7 @@ var _ = Describe("Unidirectional Streams", func() {
 	})
 
 	dataForStream := func(id protocol.StreamID) []byte {
-		return testserver.GeneratePRData(10 * int(id))
+		return GeneratePRData(10 * int(id))
 	}
 
 	runSendingPeer := func(sess quic.Session) {
@@ -76,13 +75,13 @@ var _ = Describe("Unidirectional Streams", func() {
 			sess, err := server.Accept(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 			runReceivingPeer(sess)
-			sess.Close()
+			sess.CloseWithError(0, "")
 		}()
 
 		client, err := quic.DialAddr(
 			serverAddr,
 			getTLSClientConfig(),
-			qconf,
+			getQuicConfigForClient(qconf),
 		)
 		Expect(err).ToNot(HaveOccurred())
 		runSendingPeer(client)
@@ -100,7 +99,7 @@ var _ = Describe("Unidirectional Streams", func() {
 		client, err := quic.DialAddr(
 			serverAddr,
 			getTLSClientConfig(),
-			qconf,
+			getQuicConfigForClient(qconf),
 		)
 		Expect(err).ToNot(HaveOccurred())
 		runReceivingPeer(client)
@@ -126,7 +125,7 @@ var _ = Describe("Unidirectional Streams", func() {
 		client, err := quic.DialAddr(
 			serverAddr,
 			getTLSClientConfig(),
-			qconf,
+			getQuicConfigForClient(qconf),
 		)
 		Expect(err).ToNot(HaveOccurred())
 		done2 := make(chan struct{})

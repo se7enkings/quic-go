@@ -8,7 +8,6 @@ import (
 	"os"
 
 	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -29,7 +28,7 @@ var _ = Describe("Key Update tests", func() {
 			str, err := sess.OpenUniStream()
 			Expect(err).ToNot(HaveOccurred())
 			defer str.Close()
-			_, err = str.Write(testserver.PRDataLong)
+			_, err = str.Write(PRDataLong)
 			Expect(err).ToNot(HaveOccurred())
 		}()
 	}
@@ -47,11 +46,11 @@ var _ = Describe("Key Update tests", func() {
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
-		defer sess.Close()
+		defer sess.CloseWithError(0, "")
 		str, err := sess.AcceptUniStream(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		data, err := ioutil.ReadAll(str)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(data).To(Equal(testserver.PRDataLong))
+		Expect(data).To(Equal(PRDataLong))
 	})
 })

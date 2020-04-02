@@ -9,6 +9,8 @@ import (
 	"github.com/lucas-clemente/quic-go/internal/congestion"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/marten-seemann/qtls"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -17,7 +19,7 @@ var _ = Describe("Updatable AEAD", func() {
 	for i := range cipherSuites {
 		cs := cipherSuites[i]
 
-		Context(fmt.Sprintf("using %s", cipherSuiteName(cs.ID)), func() {
+		Context(fmt.Sprintf("using %s", qtls.CipherSuiteName(cs.ID)), func() {
 
 			getPeers := func(rttStats *congestion.RTTStats) (client, server *updatableAEAD) {
 				trafficSecret1 := make([]byte, 16)
@@ -25,8 +27,8 @@ var _ = Describe("Updatable AEAD", func() {
 				rand.Read(trafficSecret1)
 				rand.Read(trafficSecret2)
 
-				client = newUpdatableAEAD(rttStats, utils.DefaultLogger)
-				server = newUpdatableAEAD(rttStats, utils.DefaultLogger)
+				client = newUpdatableAEAD(rttStats, nil, utils.DefaultLogger)
+				server = newUpdatableAEAD(rttStats, nil, utils.DefaultLogger)
 				client.SetReadKey(cs, trafficSecret2)
 				client.SetWriteKey(cs, trafficSecret1)
 				server.SetReadKey(cs, trafficSecret1)
@@ -73,6 +75,13 @@ var _ = Describe("Updatable AEAD", func() {
 					opened, err := client.Open(nil, encrypted, time.Now(), 0x1337, protocol.KeyPhaseZero, ad)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(opened).To(Equal(msg))
+				})
+
+				It("saves the first packet number", func() {
+					client.Seal(nil, msg, 0x1337, ad)
+					Expect(client.FirstPacketNumber()).To(Equal(protocol.PacketNumber(0x1337)))
+					client.Seal(nil, msg, 0x1338, ad)
+					Expect(client.FirstPacketNumber()).To(Equal(protocol.PacketNumber(0x1337)))
 				})
 
 				It("fails to open a message if the associated data is not the same", func() {
@@ -151,7 +160,7 @@ var _ = Describe("Updatable AEAD", func() {
 						It("drops keys 3 PTOs after a key update", func() {
 							now := time.Now()
 							rttStats.UpdateRTT(10*time.Millisecond, 0, now)
-							pto := rttStats.PTO()
+							pto := rttStats.PTO(true)
 							encrypted01 := client.Seal(nil, msg, 0x42, ad)
 							encrypted02 := client.Seal(nil, msg, 0x43, ad)
 							// receive the first packet with key phase 0

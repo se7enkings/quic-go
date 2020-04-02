@@ -62,7 +62,7 @@ var _ = Describe("Packet Handler Map", func() {
 		}
 		handler.server = nil
 		handler.mutex.Unlock()
-		handler.Close()
+		handler.Destroy()
 		Eventually(handler.listening).Should(BeClosed())
 	})
 
@@ -175,6 +175,12 @@ var _ = Describe("Packet Handler Map", func() {
 			conn.Close()
 			Eventually(done).Should(BeClosed())
 		})
+
+		It("says if a connection ID is already taken", func() {
+			connID := protocol.ConnectionID{1, 2, 3, 4, 5, 6, 7, 8}
+			Expect(handler.Add(connID, NewMockPacketHandler(mockCtrl))).To(BeTrue())
+			Expect(handler.Add(connID, NewMockPacketHandler(mockCtrl))).To(BeFalse())
+		})
 	})
 
 	Context("running a server", func() {
@@ -196,7 +202,7 @@ var _ = Describe("Packet Handler Map", func() {
 			clientSess.EXPECT().getPerspective().Return(protocol.PerspectiveClient)
 			serverSess := NewMockPacketHandler(mockCtrl)
 			serverSess.EXPECT().getPerspective().Return(protocol.PerspectiveServer)
-			serverSess.EXPECT().Close()
+			serverSess.EXPECT().shutdown()
 
 			handler.Add(protocol.ConnectionID{1, 1, 1, 1}, clientSess)
 			handler.Add(protocol.ConnectionID{2, 2, 2, 2}, serverSess)
@@ -227,7 +233,11 @@ var _ = Describe("Packet Handler Map", func() {
 				packet := append([]byte{0x40} /* short header packet */, make([]byte, 50)...)
 				packet = append(packet, token[:]...)
 				destroyed := make(chan struct{})
-				packetHandler.EXPECT().destroy(errors.New("received a stateless reset")).Do(func(error) {
+				packetHandler.EXPECT().destroy(gomock.Any()).Do(func(err error) {
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(BeAssignableToTypeOf(&statelessResetErr{}))
+					Expect(err.Error()).To(ContainSubstring("received a stateless reset"))
+					Expect(*err.(*statelessResetErr).StatelessResetToken()).To(Equal(token))
 					close(destroyed)
 				})
 				conn.dataToRead <- packet
@@ -242,7 +252,11 @@ var _ = Describe("Packet Handler Map", func() {
 				packet := append([]byte{0x40} /* short header packet */, make([]byte, 50)...)
 				packet = append(packet, token[:]...)
 				destroyed := make(chan struct{})
-				packetHandler.EXPECT().destroy(errors.New("received a stateless reset")).Do(func(error) {
+				packetHandler.EXPECT().destroy(gomock.Any()).Do(func(err error) {
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(BeAssignableToTypeOf(&statelessResetErr{}))
+					Expect(err.Error()).To(ContainSubstring("received a stateless reset"))
+					Expect(*err.(*statelessResetErr).StatelessResetToken()).To(Equal(token))
 					close(destroyed)
 				})
 				conn.dataToRead <- packet
@@ -292,9 +306,7 @@ var _ = Describe("Packet Handler Map", func() {
 			It("generates stateless reset tokens", func() {
 				connID1 := []byte{0xde, 0xad, 0xbe, 0xef}
 				connID2 := []byte{0xde, 0xca, 0xfb, 0xad}
-				token1 := handler.Add(connID1, nil)
-				Expect(handler.Add(connID1, nil)).To(Equal(token1))
-				Expect(handler.Add(connID2, nil)).ToNot(Equal(token1))
+				Expect(handler.GetStatelessResetToken(connID1)).ToNot(Equal(handler.GetStatelessResetToken(connID2)))
 			})
 
 			It("sends stateless resets", func() {

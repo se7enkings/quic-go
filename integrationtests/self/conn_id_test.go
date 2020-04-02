@@ -8,8 +8,8 @@ import (
 	"net"
 
 	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -35,7 +35,7 @@ var _ = Describe("Connection ID lengths tests", func() {
 					str, err := sess.OpenStream()
 					Expect(err).ToNot(HaveOccurred())
 					defer str.Close()
-					_, err = str.Write(testserver.PRData)
+					_, err = str.Write(PRData)
 					Expect(err).ToNot(HaveOccurred())
 				}()
 			}
@@ -51,22 +51,22 @@ var _ = Describe("Connection ID lengths tests", func() {
 			conf,
 		)
 		Expect(err).ToNot(HaveOccurred())
-		defer cl.Close()
+		defer cl.CloseWithError(0, "")
 		str, err := cl.AcceptStream(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		data, err := ioutil.ReadAll(str)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(data).To(Equal(testserver.PRData))
+		Expect(data).To(Equal(PRData))
 	}
 
 	It("downloads a file using a 0-byte connection ID for the client", func() {
-		serverConf := &quic.Config{
+		serverConf := getQuicConfigForServer(&quic.Config{
 			ConnectionIDLength: randomConnIDLen(),
 			Versions:           []protocol.VersionNumber{protocol.VersionTLS},
-		}
-		clientConf := &quic.Config{
+		})
+		clientConf := getQuicConfigForClient(&quic.Config{
 			Versions: []protocol.VersionNumber{protocol.VersionTLS},
-		}
+		})
 
 		ln := runServer(serverConf)
 		defer ln.Close()
@@ -74,14 +74,14 @@ var _ = Describe("Connection ID lengths tests", func() {
 	})
 
 	It("downloads a file when both client and server use a random connection ID length", func() {
-		serverConf := &quic.Config{
+		serverConf := getQuicConfigForServer(&quic.Config{
 			ConnectionIDLength: randomConnIDLen(),
 			Versions:           []protocol.VersionNumber{protocol.VersionTLS},
-		}
-		clientConf := &quic.Config{
+		})
+		clientConf := getQuicConfigForClient(&quic.Config{
 			ConnectionIDLength: randomConnIDLen(),
 			Versions:           []protocol.VersionNumber{protocol.VersionTLS},
-		}
+		})
 
 		ln := runServer(serverConf)
 		defer ln.Close()

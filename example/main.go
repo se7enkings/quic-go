@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"errors"
 	"flag"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/testdata"
 	"github.com/lucas-clemente/quic-go/internal/utils"
 	"github.com/lucas-clemente/quic-go/quictrace"
@@ -39,6 +39,17 @@ func (b *binds) Set(v string) error {
 // Size is needed by the /demo/upload handler to determine the size of the uploaded file
 type Size interface {
 	Size() int64
+}
+
+// See https://en.wikipedia.org/wiki/Lehmer_random_number_generator
+func generatePRData(l int) []byte {
+	res := make([]byte, l)
+	seed := uint64(1)
+	for i := 0; i < l; i++ {
+		seed = seed * 48271 % 2147483647
+		res[i] = byte(seed)
+	}
+	return res
 }
 
 var tracer quictrace.Tracer
@@ -75,7 +86,7 @@ var _ http.Handler = &tracingHandler{}
 func (h *tracingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 	if err := exportTraces(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }
 
@@ -93,7 +104,7 @@ func setupHandler(www string, trace bool) http.Handler {
 				w.WriteHeader(400)
 				return
 			}
-			w.Write(testserver.GeneratePRData(int(num)))
+			w.Write(generatePRData(int(num)))
 		})
 	}
 
@@ -176,6 +187,7 @@ func main() {
 	www := flag.String("www", "", "www data")
 	tcp := flag.Bool("tcp", false, "also listen on TCP")
 	trace := flag.Bool("trace", false, "enable quic-trace")
+	qlog := flag.Bool("qlog", false, "output a qlog (in the same directory)")
 	flag.Parse()
 
 	logger := utils.DefaultLogger
@@ -192,9 +204,20 @@ func main() {
 	}
 
 	handler := setupHandler(*www, *trace)
-	var quicConf *quic.Config
+	quicConf := &quic.Config{}
 	if *trace {
-		quicConf = &quic.Config{QuicTracer: tracer}
+		quicConf.QuicTracer = tracer
+	}
+	if *qlog {
+		quicConf.GetLogWriter = func(connID []byte) io.WriteCloser {
+			filename := fmt.Sprintf("server_%x.qlog", connID)
+			f, err := os.Create(filename)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Creating qlog file %s.\n", filename)
+			return utils.NewBufferedWriteCloser(bufio.NewWriter(f), f)
+		}
 	}
 
 	var wg sync.WaitGroup
