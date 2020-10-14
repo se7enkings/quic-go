@@ -1,6 +1,6 @@
 package quic
 
-import "github.com/lucas-clemente/quic-go/internal/protocol"
+import "github.com/se7enkings/quic-go/internal/protocol"
 
 // Clone clones a Config
 func (c *Config) Clone() *Config {

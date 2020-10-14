@@ -6,7 +6,7 @@ import (
 
 	"sync"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/se7enkings/quic-go"
 )
 
 // The body of a http.Request or http.Response.

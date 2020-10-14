@@ -11,12 +11,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/lucas-clemente/quic-go/internal/congestion"
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/qerr"
-	"github.com/lucas-clemente/quic-go/internal/testdata"
-	"github.com/lucas-clemente/quic-go/internal/utils"
-	"github.com/lucas-clemente/quic-go/internal/wire"
+	"github.com/se7enkings/quic-go/internal/congestion"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/qerr"
+	"github.com/se7enkings/quic-go/internal/testdata"
+	"github.com/se7enkings/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/wire"
 	"github.com/marten-seemann/qtls"
 
 	"github.com/golang/mock/gomock"

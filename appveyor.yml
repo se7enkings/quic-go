@@ -10,7 +10,7 @@ environment:
     - GOARCH: 386
     - GOARCH: amd64
 
-clone_folder: c:\gopath\src\github.com\lucas-clemente\quic-go
+clone_folder: c:\gopath\src\github.com\se7enkings\quic-go
 
 install:
   - rmdir c:\go /s /q

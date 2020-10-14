@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucas-clemente/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/protocol"
 )
 
 type zeroRTTQueueEntry struct {

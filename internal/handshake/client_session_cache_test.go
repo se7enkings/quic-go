@@ -6,11 +6,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/utils"
 
 	"github.com/marten-seemann/qtls"
 
-	"github.com/lucas-clemente/quic-go/internal/congestion"
+	"github.com/se7enkings/quic-go/internal/congestion"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

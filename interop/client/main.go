@@ -13,11 +13,11 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/http3"
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/interop/http09"
-	"github.com/lucas-clemente/quic-go/interop/utils"
+	"github.com/se7enkings/quic-go"
+	"github.com/se7enkings/quic-go/http3"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/interop/http09"
+	"github.com/se7enkings/quic-go/interop/utils"
 )
 
 var errUnsupported = errors.New("unsupported test case")

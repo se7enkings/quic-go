@@ -13,10 +13,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/se7enkings/quic-go"
 
-	"github.com/lucas-clemente/quic-go/internal/testdata"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/testdata"
+	"github.com/se7enkings/quic-go/internal/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

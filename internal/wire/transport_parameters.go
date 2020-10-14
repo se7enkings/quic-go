@@ -10,10 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lucas-clemente/quic-go/internal/qerr"
+	"github.com/se7enkings/quic-go/internal/qerr"
 
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/utils"
 )
 
 const transportParameterMarshalingVersion = 1
