@@ -6,11 +6,7 @@ import (
 	"math"
 	"time"
 
-	"os"
-
 	"log"
-
-	"strings"
 
 	"github.com/lucas-clemente/quic-go/internal/congestion"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
@@ -99,7 +95,7 @@ func NewSentPacketHandler(
 	}
 
 	var cc congestion.SendAlgorithmWithDebugInfos
-	if strings.Contains(os.Getenv("GODEBUG"), "bbr=1") {
+	if true {
 		log.Printf("quic-go: bbr is enabled.")
 		cc = congestion.NewBBRSender(congestion.DefaultClock{},
 			rttStats,
