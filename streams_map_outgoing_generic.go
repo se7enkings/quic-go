@@ -3,8 +3,8 @@ package quic
 import (
 	"sync"
 
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/wire"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/wire"
 )
 
 //go:generate genny -in $GOFILE -out streams_map_outgoing_bidi.go gen "item=streamI Item=BidiStream streamTypeGeneric=protocol.StreamTypeBidi"

@@ -2,7 +2,7 @@ package http3
 
 import (
 	"github.com/golang/mock/gomock"
-	mockquic "github.com/lucas-clemente/quic-go/internal/mocks/quic"
+	mockquic "github.com/se7enkings/quic-go/internal/mocks/quic"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

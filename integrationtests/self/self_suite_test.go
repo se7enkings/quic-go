@@ -8,8 +8,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	_ "github.com/lucas-clemente/quic-go/integrationtests/tools/testlog"
-	"github.com/lucas-clemente/quic-go/internal/testdata"
+	_ "github.com/se7enkings/quic-go/integrationtests/tools/testlog"
+	"github.com/se7enkings/quic-go/internal/testdata"
 )
 
 const alpn = "quic-go integration tests"

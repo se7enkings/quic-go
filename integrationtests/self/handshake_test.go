@@ -6,10 +6,10 @@ import (
 	"net"
 	"time"
 
-	quic "github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/integrationtests/tools/israce"
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/qerr"
+	quic "github.com/se7enkings/quic-go"
+	"github.com/se7enkings/quic-go/integrationtests/tools/israce"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/qerr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

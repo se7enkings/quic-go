@@ -3,7 +3,7 @@ package http3
 import (
 	"io"
 
-	quic "github.com/lucas-clemente/quic-go"
+	quic "github.com/se7enkings/quic-go"
 )
 
 type responseBody struct {

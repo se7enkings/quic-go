@@ -12,7 +12,7 @@ jobs:
       - image: << parameters.image >>
         environment:
           GO111MODULE: "on"
-    working_directory: /go/src/github.com/lucas-clemente/quic-go
+    working_directory: /go/src/github.com/se7enkings/quic-go
     steps:
       - checkout
       - run:

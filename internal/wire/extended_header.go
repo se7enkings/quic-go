@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/utils"
 )
 
 // ExtendedHeader is the header of a QUIC packet.

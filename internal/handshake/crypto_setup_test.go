@@ -13,10 +13,10 @@ import (
 	"time"
 
 	gomock "github.com/golang/mock/gomock"
-	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/qerr"
-	"github.com/lucas-clemente/quic-go/internal/testdata"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	"github.com/se7enkings/quic-go/internal/protocol"
+	"github.com/se7enkings/quic-go/internal/qerr"
+	"github.com/se7enkings/quic-go/internal/testdata"
+	"github.com/se7enkings/quic-go/internal/utils"
 	"github.com/marten-seemann/qtls"
 
 	. "github.com/onsi/ginkgo"
