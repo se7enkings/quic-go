@@ -41,16 +41,16 @@ var (
 	StartupAfterLossGain = 1.5
 
 	// The cycle of gains used during the PROBE_BW stage.
-	PacingGain = []float64{1.25, 0.75, 1, 1, 1, 1, 1, 1}
+	PacingGain = []float64{1.5, 0.75, 1.125, 1.125, 1.125, 1.125, 1.125, 1.125}
 
 	// The length of the gain cycle.
 	GainCycleLength = len(PacingGain)
 
 	// The size of the bandwidth filter window, in round-trips.
-	BandwidthWindowSize = GainCycleLength + 2
+	BandwidthWindowSize = GainCycleLength + 7
 
 	// The time after which the current min_rtt value expires.
-	MinRttExpiry = 10 * time.Second
+	MinRttExpiry = 20 * time.Second
 
 	// The minimum time the connection can spend in PROBE_RTT mode.
 	ProbeRttTime = time.Millisecond * 200
@@ -243,7 +243,7 @@ func NewBBRSender(clock Clock, rttStats *RTTStats, initialCongestionWindow, maxC
 		minCongestionWindow:       DefaultMinimumCongestionWindow,
 		highGain:                  DefaultHighGain,
 		highCwndGain:              DefaultHighGain,
-		drainGain:                 1.0 / DefaultHighGain,
+		drainGain:                 1.1 * 1.0 / DefaultHighGain,
 		pacingGain:                1.0,
 		congestionWindowGain:      1.0,
 		congestionWindowGainConst: DefaultCongestionWindowGainConst,
